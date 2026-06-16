@@ -1,0 +1,6 @@
+{
+  "name": "TDZ TUNNEL",
+  "description": "A high-performance V2ray / Xray VPN Client with full customization support, configuration editor, QR code importer, statistics logs, ping testers, and speed dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
