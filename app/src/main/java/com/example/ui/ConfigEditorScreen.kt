@@ -43,14 +43,15 @@ fun ConfigEditorScreen(
 
     // Fields
     var name by remember { mutableStateOf(editingProfile?.name ?: "New Server") }
-    var protocol by remember { mutableStateOf(editingProfile?.protocol ?: "VLESS") } // VMESS, VLESS, SHADOWSOCKS, TROJAN, SSH, WIREGUARD, RAW_JSON
+    var protocol by remember { mutableStateOf(editingProfile?.protocol ?: "VLESS") } // VMESS, VLESS, SHADOWSOCKS, TROJAN, SSH, RAW_JSON
     var address by remember { mutableStateOf(editingProfile?.address ?: "") }
-    var portString by remember { mutableStateOf(editingProfile?.port?.toString() ?: "443") }
+    var portString by remember { mutableStateOf(editingProfile?.port?.toString() ?: "") }
     var uuidOrPassword by remember { mutableStateOf(editingProfile?.uuidOrPassword ?: "") }
     var transport by remember { mutableStateOf(editingProfile?.transport ?: "WS") } // TCP, WS, gRPC, mKCP
     var security by remember { mutableStateOf(editingProfile?.security ?: "TLS") } // None, TLS, XTLS, Reality
     var sni by remember { mutableStateOf(editingProfile?.sni ?: "") }
     var path by remember { mutableStateOf(editingProfile?.path ?: "") }
+    var payload by remember { mutableStateOf(editingProfile?.payload ?: "") }
     var rawJson by remember { mutableStateOf(editingProfile?.rawJson ?: "") }
 
     var isPasswordVisible by remember { mutableStateOf(false) }
@@ -91,7 +92,7 @@ fun ConfigEditorScreen(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "Xray Customization Panel",
+                    text = "Customization Panel",
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                     style = MaterialTheme.typography.bodySmall
                 )
@@ -102,8 +103,8 @@ fun ConfigEditorScreen(
         OutlinedTextField(
             value = name,
             onValueChange = { name = it },
-            label = { Text("Connection Label Name") },
-            placeholder = { Text("e.g. Singapore HighSpeed VLESS") },
+            label = { Text("Connection Name") },
+            placeholder = { Text("e.g. My Premium Server") },
             leadingIcon = { Icon(Icons.Default.Label, "Name") },
             modifier = Modifier
                 .fillMaxWidth()
@@ -115,18 +116,17 @@ fun ConfigEditorScreen(
         Box(modifier = Modifier.fillMaxWidth()) {
             OutlinedTextField(
                 value = when (protocol) {
-                    "VMESS" -> "VMess Protocol (Standard proxy node)"
-                    "VLESS" -> "VLess Protocol (Lightweight zero-encryption)"
-                    "SHADOWSOCKS" -> "Shadowsocks Core (AEAD ciphers)"
-                    "TROJAN" -> "Trojan (TLS mimic proxy)"
-                    "SSH" -> "SSH Tunnel"
-                    "WIREGUARD" -> "Wireguard Protocol"
-                    "RAW_JSON" -> "⚡ Custom Xray Core Raw Config (EDIT JSON CODE)"
+                    "VMESS" -> "VMESS"
+                    "VLESS" -> "VLESS"
+                    "SHADOWSOCKS" -> "SHADOWSOCKS"
+                    "TROJAN" -> "TROJAN"
+                    "SSH" -> "SSH"
+                    "RAW_JSON" -> "RAW JSON"
                     else -> protocol
                 },
                 onValueChange = {},
                 readOnly = true,
-                label = { Text("VPN Core Protocol") },
+                label = { Text("Core Protocol") },
                 leadingIcon = { Icon(Icons.Default.SettingsSuggest, "Protocol selector") },
                 trailingIcon = {
                     IconButton(onClick = { isProtocolDropdownExpanded = true }) {
@@ -143,13 +143,18 @@ fun ConfigEditorScreen(
                 onDismissRequest = { isProtocolDropdownExpanded = false },
                 modifier = Modifier.fillMaxWidth(0.9f)
             ) {
-                listOf("VLESS", "VMESS", "SHADOWSOCKS", "TROJAN", "SSH", "WIREGUARD", "RAW_JSON").forEach { option ->
+                listOf("VLESS", "VMESS", "SHADOWSOCKS", "TROJAN", "SSH", "RAW_JSON").forEach { option ->
                     DropdownMenuItem(
                         text = {
                             Text(
                                 text = when (option) {
-                                    "RAW_JSON" -> "⚡ RAW JSON Xray config (Direct Code Edit)"
-                                    else -> "$option Protocol"
+                                    "VMESS" -> "VMESS"
+                                    "VLESS" -> "VLESS"
+                                    "SHADOWSOCKS" -> "SHADOWSOCKS"
+                                    "TROJAN" -> "TROJAN"
+                                    "SSH" -> "SSH"
+                                    "RAW_JSON" -> "RAW JSON"
+                                    else -> option
                                 },
                                 fontWeight = FontWeight.Bold
                             )
@@ -157,6 +162,22 @@ fun ConfigEditorScreen(
                         onClick = {
                             protocol = option
                             isProtocolDropdownExpanded = false
+
+                            // Intelligent default setting for core parameters based on protocol
+                            when (option) {
+                                "SSH" -> {
+                                    transport = "Direct"
+                                    security = "NONE"
+                                }
+                                "SHADOWSOCKS" -> {
+                                    transport = "TCP"
+                                    security = "NONE"
+                                }
+                                else -> {
+                                    transport = "WS"
+                                    security = "TLS"
+                                }
+                            }
 
                             // auto fill json placeholder if empty
                             if (option == "RAW_JSON" && rawJson.isBlank()) {
@@ -206,7 +227,7 @@ fun ConfigEditorScreen(
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Text(
-                          text = "Xray Core JSON Code Editor",
+                          text = "JSON Code Editor",
                           style = MaterialTheme.typography.labelSmall,
                           color = MaterialTheme.colorScheme.primary,
                           fontWeight = FontWeight.Bold
@@ -240,7 +261,7 @@ fun ConfigEditorScreen(
                     OutlinedTextField(
                         value = rawJson,
                         onValueChange = { rawJson = it },
-                        placeholder = { Text("Declare full custom Xray JSON object here...") },
+                        placeholder = { Text("Declare full custom JSON object here...") },
                         textStyle = androidx.compose.ui.text.TextStyle(
                             fontFamily = FontFamily.Monospace,
                             fontSize = 12.sp,
@@ -271,8 +292,8 @@ fun ConfigEditorScreen(
                 OutlinedTextField(
                     value = address,
                     onValueChange = { address = it },
-                    label = { Text("Server Host / IP") },
-                    placeholder = { Text("sg.server.com or 12.345...") },
+            label = { Text("Server Address") },
+            placeholder = { Text("e.g. sg.server.com") },
                     leadingIcon = { Icon(Icons.Default.Dns, "IP") },
                     modifier = Modifier
                         .weight(1.7f)
@@ -306,21 +327,11 @@ fun ConfigEditorScreen(
                 placeholder = { Text("v2ray-uuid-or-secret-handshake") },
                 leadingIcon = { Icon(Icons.Default.VpnKey, "Secret ID") },
                 trailingIcon = {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        if (protocol == "VLESS" || protocol == "VMESS") {
-                            IconButton(onClick = {
-                                uuidOrPassword = UUID.randomUUID().toString()
-                                Toast.makeText(context, "Random UUID Generated!", Toast.LENGTH_SHORT).show()
-                            }) {
-                                Icon(Icons.Default.Refresh, "Auto-Generate UUID")
-                            }
-                        }
-                        IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
-                            Icon(
-                                imageVector = if (isPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
-                                contentDescription = "Password toggle"
-                            )
-                        }
+                    IconButton(onClick = { isPasswordVisible = !isPasswordVisible }) {
+                        Icon(
+                            imageVector = if (isPasswordVisible) Icons.Default.Visibility else Icons.Default.VisibilityOff,
+                            contentDescription = "Password toggle"
+                        )
                     }
                 },
                 visualTransformation = if (isPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
@@ -331,20 +342,88 @@ fun ConfigEditorScreen(
             )
 
             // Dynamic transport / security selectors
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                // Dropdown transport network channel
-                Box(modifier = Modifier.weight(1f)) {
+            if (protocol == "VLESS" || protocol == "VMESS" || protocol == "TROJAN") {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Dropdown transport network channel
+                    Box(modifier = Modifier.weight(1f)) {
+                        OutlinedTextField(
+                            value = transport,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Transport Network") },
+                            trailingIcon = {
+                                IconButton(onClick = { isTransportDropdownExpanded = true }) {
+                                    Icon(Icons.Default.ArrowDropDown, "Open details")
+                                }
+                            },
+                            modifier = Modifier.clickable { isTransportDropdownExpanded = true }
+                        )
+
+                        DropdownMenu(
+                            expanded = isTransportDropdownExpanded,
+                            onDismissRequest = { isTransportDropdownExpanded = false }
+                        ) {
+                            listOf("WS", "gRPC", "TCP", "mKCP", "QUIC").forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(option) },
+                                    onClick = {
+                                        transport = option
+                                        isTransportDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+
+                    // Dropdown security TLS layers
+                    Box(modifier = Modifier.weight(1f)) {
+                        OutlinedTextField(
+                            value = security,
+                            onValueChange = {},
+                            readOnly = true,
+                            label = { Text("Security Layer") },
+                            trailingIcon = {
+                                IconButton(onClick = { isSecurityDropdownExpanded = true }) {
+                                    Icon(Icons.Default.ArrowDropDown, "Open details")
+                                }
+                            },
+                            modifier = Modifier.clickable { isSecurityDropdownExpanded = true }
+                        )
+
+                        DropdownMenu(
+                            expanded = isSecurityDropdownExpanded,
+                            onDismissRequest = { isSecurityDropdownExpanded = false }
+                        ) {
+                            listOf("TLS", "Reality", "XTLS", "NONE").forEach { option ->
+                                DropdownMenuItem(
+                                    text = { Text(option) },
+                                    onClick = {
+                                        security = option
+                                        isSecurityDropdownExpanded = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                }
+            } else if (protocol == "SSH") {
+                Box(modifier = Modifier.fillMaxWidth()) {
                     OutlinedTextField(
-                        value = transport,
+                        value = when (transport) {
+                            "Direct" -> "Direct"
+                            "WS" -> "WS"
+                            "STunnel4" -> "STunnel"
+                            else -> transport
+                        },
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Transport Network") },
+                        label = { Text("SSH Connection Mode") },
                         trailingIcon = {
                             IconButton(onClick = { isTransportDropdownExpanded = true }) {
-                                Icon(Icons.Default.ArrowDropDown, "Open details")
+                                Icon(Icons.Default.ArrowDropDown, "Open options")
                             }
                         },
                         modifier = Modifier.clickable { isTransportDropdownExpanded = true }
@@ -352,81 +431,140 @@ fun ConfigEditorScreen(
 
                     DropdownMenu(
                         expanded = isTransportDropdownExpanded,
-                        onDismissRequest = { isTransportDropdownExpanded = false }
+                        onDismissRequest = { isTransportDropdownExpanded = false },
+                        modifier = Modifier.fillMaxWidth(0.9f)
                     ) {
-                        listOf("WS", "gRPC", "TCP", "mKCP", "QUIC").forEach { option ->
+                        listOf("Direct", "WS", "STunnel4").forEach { option ->
                             DropdownMenuItem(
-                                text = { Text(option) },
+                                text = {
+                                    Text(
+                                        text = when (option) {
+                                            "Direct" -> "Direct"
+                                            "WS" -> "WS"
+                                            "STunnel4" -> "STunnel"
+                                            else -> option
+                                        },
+                                        fontWeight = FontWeight.SemiBold
+                                    )
+                                },
                                 onClick = {
                                     transport = option
                                     isTransportDropdownExpanded = false
+                                    security = if (option == "STunnel4" || option == "WS") "TLS" else "NONE"
                                 }
                             )
                         }
                     }
                 }
-
-                // Dropdown security TLS layers
-                Box(modifier = Modifier.weight(1f)) {
-                    OutlinedTextField(
-                        value = security,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Security Layer") },
-                        trailingIcon = {
-                            IconButton(onClick = { isSecurityDropdownExpanded = true }) {
-                                Icon(Icons.Default.ArrowDropDown, "Open details")
-                            }
-                        },
-                        modifier = Modifier.clickable { isSecurityDropdownExpanded = true }
+            } else {
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
                     )
-
-                    DropdownMenu(
-                        expanded = isSecurityDropdownExpanded,
-                        onDismissRequest = { isSecurityDropdownExpanded = false }
+                ) {
+                    Row(
+                        modifier = Modifier.padding(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
-                        listOf("TLS", "Reality", "XTLS", "NONE").forEach { option ->
-                            DropdownMenuItem(
-                                text = { Text(option) },
-                                onClick = {
-                                    security = option
-                                    isSecurityDropdownExpanded = false
-                                }
-                            )
-                        }
+                        Icon(
+                            imageVector = Icons.Default.Info,
+                            contentDescription = "Info",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                        Text(
+                            text = when (protocol) {
+                                "SHADOWSOCKS" -> "Shadowsocks (TCP/UDP)"
+                                else -> "Custom network transport handling."
+                            },
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSecondaryContainer
+                        )
                     }
                 }
             }
 
-            // Advanced custom fields SNI / Websocket Path
-            Text(
-                text = "Advanced Transmission Settings (Optional)",
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            val showSNI = when (protocol) {
+                "VLESS", "VMESS", "TROJAN" -> security != "NONE"
+                "SSH" -> transport == "WS" || transport == "STunnel4"
+                else -> false
+            }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(16.dp)
-            ) {
-                OutlinedTextField(
-                    value = sni,
-                    onValueChange = { sni = it },
-                    label = { Text("Server SNI / Host") },
-                    placeholder = { Text("e.g. apple.com") },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true
+            val showPath = when (protocol) {
+                "VLESS", "VMESS", "TROJAN" -> transport == "WS" || transport == "gRPC"
+                "SSH" -> transport == "WS"
+                else -> false
+            }
+
+            val showPayload = protocol == "SSH" && transport == "WS"
+
+            if (showSNI || showPath || showPayload) {
+                Text(
+                    text = "Advanced Transmission Settings (Optional)",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
-                OutlinedTextField(
-                    value = path,
-                    onValueChange = { path = it },
-                    label = { Text("WS/gRPC Path") },
-                    placeholder = { Text("e.g. /ray-tunnel") },
-                    modifier = Modifier.weight(1f),
-                    singleLine = true
-                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    if (showSNI) {
+                        OutlinedTextField(
+                            value = sni,
+                            onValueChange = { sni = it },
+                            label = { Text(if (protocol == "SSH" && transport == "STunnel4") "STunnel SNI" else "Server SNI / Host") },
+                            placeholder = { Text("e.g. apple.com") },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                    }
+
+                    if (showPath) {
+                        OutlinedTextField(
+                            value = path,
+                            onValueChange = { path = it },
+                            label = {
+                                Text(
+                                    when {
+                                        protocol == "SSH" -> "Connection/WS Path"
+                                        transport == "gRPC" -> "gRPC Service Name"
+                                        else -> "WS Path"
+                                    }
+                                )
+                            },
+                            placeholder = {
+                                Text(
+                                    when {
+                                        protocol == "SSH" -> "e.g. /ssh"
+                                        transport == "gRPC" -> "e.g. MyService"
+                                        else -> "e.g. /ray-tunnel"
+                                    }
+                                )
+                            },
+                            modifier = Modifier.weight(1f),
+                            singleLine = true
+                        )
+                    } else if (showSNI) {
+                        Spacer(modifier = Modifier.weight(1f))
+                    }
+                }
+
+                if (showPayload) {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = payload,
+                        onValueChange = { payload = it },
+                        label = { Text("HTTP Payload / Injection Header") },
+                        placeholder = { Text("e.g. CONNECT [host_port] HTTP/1.1[crlf]Host: apple.com[crlf][crlf]") },
+                        modifier = Modifier.fillMaxWidth(),
+                        supportingText = {
+                            Text("Supports standard [host], [port], [host_port], [crlf] macros.", style = MaterialTheme.typography.labelSmall)
+                        }
+                    )
+                }
             }
         }
 
@@ -451,6 +589,11 @@ fun ConfigEditorScreen(
                         Toast.makeText(context, "Server host or IP is required!", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
+                    val typedPort = portString.toIntOrNull()
+                    if (typedPort == null || typedPort <= 0 || typedPort > 65535) {
+                        Toast.makeText(context, "A valid server port (1-65535) is required!", Toast.LENGTH_SHORT).show()
+                        return@Button
+                    }
                 }
 
                 val targetPort = portString.toIntOrNull() ?: 443
@@ -466,6 +609,7 @@ fun ConfigEditorScreen(
                     security = security,
                     sni = sni.trim(),
                     path = path.trim(),
+                    payload = payload.trim(),
                     rawJson = if (protocol == "RAW_JSON") rawJson.trim() else "",
                     isSelected = editingProfile?.isSelected ?: false,
                     pingMs = editingProfile?.pingMs ?: -1

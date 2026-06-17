@@ -66,7 +66,7 @@ fun AiCompanionScreen(
         mutableStateOf(
             listOf(
                 ChatMessage(
-                    text = "Hello! I am your AI assistant. 😊\n\nAsk me anything about V2ray, Xray, VMess, VLess, or Reality tunneling protocols, or ask me to explain a configuration link.",
+                    text = "Hello! I am your AI assistant. 😊\n\nHow can I help you with your configurations today?",
                     isUser = false
                 )
             )
@@ -152,7 +152,7 @@ fun AiCompanionScreen(
 
             Column {
                 Text(
-                    text = "Xray AI Companion",
+                    text = "Profile AI Assistant",
                     color = MaterialTheme.colorScheme.primary,
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.Bold
@@ -172,7 +172,7 @@ fun AiCompanionScreen(
         ) {
             listOf(
                 "VMess vs VLess" to "What are the main differences between VMess and VLess protocols?",
-                "What is Reality?" to "What is Xray Reality security mode and how does it work?",
+                "What is Reality?" to "What is Reality security mode and how does it work?",
                 "How to Speed Up" to "How can I optimize and speed up my V2ray VPN tunnel configurations?"
             ).forEach { (label, fullQuery) ->
                 Box(
@@ -365,7 +365,7 @@ private suspend fun executeGeminiApiCall(
             put(JSONObject().apply {
                 put("parts", JSONArray().apply {
                     put(JSONObject().apply {
-                        put("text", "You are an expert specialist in V2ray and Xray core networking, VPN tunneling, configuration handshakes, and Reality security. Answer the user prompt cleanly, concisely, and professionally in English. Be helpful, technical, but simple. User prompt: $prompt")
+                        put("text", "You are an expert specialist in V2ray and tunneling core networking, VPN tunneling, configuration handshakes, and Reality security. Answer the user prompt cleanly, concisely, and professionally in English. Be helpful, technical, but simple. User prompt: $prompt")
                     })
                 })
             })

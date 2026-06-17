@@ -16,6 +16,7 @@ data class V2rayProfile(
     val security: String = "TLS", // None, TLS, XTLS, Reality
     val sni: String = "",
     val path: String = "",
+    val payload: String = "",
     val rawJson: String = "", // Holds full custom Xray JSON configuration if user edits RAW config!
     val isSelected: Boolean = false,
     val pingMs: Int = -1 // -1 means not tested, -2 means timeout, >0 is latency in ms

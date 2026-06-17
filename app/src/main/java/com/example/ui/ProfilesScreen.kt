@@ -4,7 +4,10 @@ import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import android.content.Context
+import android.net.Uri
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -68,6 +71,36 @@ fun ProfilesScreen(
 
     var importText by remember { mutableStateOf("") }
     var showImportDialog by remember { mutableStateOf(false) }
+    var profileToDelete by remember { mutableStateOf<V2rayProfile?>(null) }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        uri?.let {
+            try {
+                val image = com.google.mlkit.vision.common.InputImage.fromFilePath(context, it)
+                val scannerClient = com.google.mlkit.vision.barcode.BarcodeScanning.getClient()
+                scannerClient.process(image)
+                    .addOnSuccessListener { barcodes ->
+                        val qrCode = barcodes.firstOrNull { b ->
+                            b.format == Barcode.FORMAT_QR_CODE
+                        }
+                        val rawValue = qrCode?.rawValue
+                        if (!rawValue.isNullOrBlank()) {
+                            importText = rawValue
+                            showImportDialog = true
+                        } else {
+                            Toast.makeText(context, "No QR Code found in this image!", Toast.LENGTH_LONG).show()
+                        }
+                    }
+                    .addOnFailureListener { e ->
+                        Toast.makeText(context, "Failed to read image: ${e.message}", Toast.LENGTH_SHORT).show()
+                    }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Failed to load image: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     var selectedSubTab by remember { mutableStateOf(0) } // 0 = Servers list, 1 = Ping utility
 
@@ -164,7 +197,7 @@ fun ProfilesScreen(
                     fontWeight = FontWeight.Bold
                 )
                 Text(
-                    text = "Add or update configuration keys.",
+                    text = "Add or update configuration.",
                     color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                     style = MaterialTheme.typography.bodySmall
                 )
@@ -189,8 +222,21 @@ fun ProfilesScreen(
                 ) {
                     Icon(
                         imageVector = Icons.Default.QrCodeScanner,
-                        contentDescription = "Scan QR",
+                        contentDescription = "Scan QR with Camera",
                         tint = MaterialTheme.colorScheme.onTertiary
+                    )
+                }
+
+                IconButton(
+                    onClick = {
+                        galleryLauncher.launch("image/*")
+                    },
+                    colors = IconButtonDefaults.iconButtonColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Image,
+                        contentDescription = "Scan QR from Gallery",
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer
                     )
                 }
 
@@ -230,7 +276,7 @@ fun ProfilesScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
-                        text = "Import configuration (vmess, vless, ss, raw json):",
+                        text = "Import configuration:",
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                         fontWeight = FontWeight.Bold
@@ -244,7 +290,7 @@ fun ProfilesScreen(
                         OutlinedTextField(
                             value = importText,
                             onValueChange = { importText = it },
-                            placeholder = { Text("vmess://, vless:// or raw JSON", fontSize = 12.sp) },
+                            placeholder = { Text("Paste configuration link here", fontSize = 12.sp) },
                             textStyle = MaterialTheme.typography.bodySmall,
                             modifier = Modifier
                                 .weight(1f)
@@ -321,7 +367,7 @@ fun ProfilesScreen(
                         textAlign = TextAlign.Center
                     )
                     Text(
-                        text = "Tap the plus (+) button to add manually, or paste a vmess/vless link above.",
+                        text = "Tap the plus (+) button to add manually.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         textAlign = TextAlign.Center
@@ -342,7 +388,7 @@ fun ProfilesScreen(
                         onSelect = { viewModel.selectProfile(item) },
                         onPing = { viewModel.testProfilePing(item) },
                         onEdit = { onNavigateToEditor(item) },
-                        onDelete = { viewModel.deleteProfile(item) },
+                        onDelete = { profileToDelete = item },
                         onExportShare = {
                             val shareUri = VpnEngine.exportToShareLink(item)
                             clipboardManager.setText(AnnotatedString(shareUri))
@@ -361,8 +407,33 @@ fun ProfilesScreen(
                 .align(Alignment.End)
                 .testTag("add_profile_fab")
         ) {
-            Icon(Icons.Default.Add, "New Configuration Code Profile", tint = MaterialTheme.colorScheme.onPrimary)
+            Icon(Icons.Default.Add, "New Configuration", tint = MaterialTheme.colorScheme.onPrimary)
         }
+        }
+
+        profileToDelete?.let { profile ->
+            AlertDialog(
+                onDismissRequest = { profileToDelete = null },
+                title = { Text("Delete Configuration") },
+                text = { Text("Are you sure you want to permanently delete '${profile.name}'? This action cannot be undone.") },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            viewModel.deleteProfile(profile)
+                            profileToDelete = null
+                            Toast.makeText(context, "Deleted successfully", Toast.LENGTH_SHORT).show()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Delete")
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { profileToDelete = null }) {
+                        Text("Cancel")
+                    }
+                }
+            )
         }
     }
 }

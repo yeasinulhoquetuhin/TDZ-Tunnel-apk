@@ -42,6 +42,18 @@ class VpnViewModel(application: Application) : AndroidViewModel(application) {
     private val _themeColor = MutableStateFlow("#0052FF") // Default primary color
     val themeColor = _themeColor.asStateFlow()
 
+    private val _themeMode = MutableStateFlow("SYSTEM") // SYSTEM, LIGHT, DARK
+    val themeMode = _themeMode.asStateFlow()
+
+    private val _homeGlowStyle = MutableStateFlow("VIBRANT")
+    val homeGlowStyle = _homeGlowStyle.asStateFlow()
+
+    private val _homeHeaderTitle = MutableStateFlow("Premium Tunnel")
+    val homeHeaderTitle = _homeHeaderTitle.asStateFlow()
+
+    private val _cardBorderStyle = MutableStateFlow("ROUNDED")
+    val cardBorderStyle = _cardBorderStyle.asStateFlow()
+
 
     // Ping testing state
     private val _pingingProfiles = MutableStateFlow<Set<Int>>(emptySet())
@@ -67,18 +79,24 @@ class VpnViewModel(application: Application) : AndroidViewModel(application) {
             _hapticsEnabled.value = repository.getSetting("haptics_enabled", "true") == "true"
             _connectOnBoot.value = repository.getSetting("connect_on_boot", "false") == "true"
             _themeColor.value = repository.getSetting("theme_primary_color", "#0052FF")
+            _themeMode.value = repository.getSetting("theme_mode", "SYSTEM")
+            
+            _homeGlowStyle.value = repository.getSetting("home_glow_style", "VIBRANT")
+            _homeHeaderTitle.value = repository.getSetting("home_header_title", "Premium Tunnel")
+            _cardBorderStyle.value = repository.getSetting("card_border_style", "ROUNDED")
 
             // Pre-fill DB with standard helpful premium servers on first install
-            val existing = repository.getAllProfilesList()
-            if (existing.isEmpty()) {
+            val hasSeeded = repository.getSetting("has_seeded_profiles", "false") == "true"
+            if (!hasSeeded) {
                 seedInitialProfiles()
+                repository.saveSetting("has_seeded_profiles", "true")
             }
         }
     }
 
     private suspend fun seedInitialProfiles() {
         val default1 = V2rayProfile(
-            name = "⚡ Singapore Premium VLESS (Xray Cloud)",
+            name = "⚡ Singapore Premium (VLESS)",
             protocol = "VLESS",
             address = "sg-premium.xraydns.net",
             port = 443,
@@ -124,19 +142,20 @@ class VpnViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleVpnConnection(profile: V2rayProfile) {
         if (vpnStatus.value == VpnEngine.ConnectionStatus.CONNECTED) {
-            VpnEngine.stopVpn(repository)
+            VpnEngine.stopVpn(getApplication(), repository)
         } else {
             VpnEngine.startVpn(getApplication(), profile, repository)
         }
     }
 
     fun stopVpnConnection() {
-        VpnEngine.stopVpn(repository)
+        VpnEngine.stopVpn(getApplication(), repository)
     }
 
     fun selectProfile(profile: V2rayProfile) {
         viewModelScope.launch {
             repository.selectProfile(profile.id)
+            VpnEngine.updateSelectedProfile(profile.copy(isSelected = true))
             repository.logInfo("Active profile selection: [${profile.name}]")
             // Check if VPN is running, we might need a reconnect
             if (vpnStatus.value == VpnEngine.ConnectionStatus.CONNECTED) {
@@ -167,11 +186,18 @@ class VpnViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             repository.deleteProfileById(profile.id)
             repository.logInfo("Profile deleted: [${profile.name}]")
-            if (currentSelectedProfile.value?.id == profile.id) {
-                // If we deleted selected config, find another one
-                val remaining = repository.getAllProfilesList()
-                if (remaining.isNotEmpty()) {
-                    selectProfile(remaining.first())
+            val remaining = repository.getAllProfilesList()
+            if (remaining.isEmpty()) {
+                repository.deselectAllProfiles()
+                VpnEngine.clearSelection()
+            } else {
+                if (currentSelectedProfile.value?.id == profile.id) {
+                    val activeSelected = remaining.find { it.isSelected }
+                    if (activeSelected != null) {
+                        selectProfile(activeSelected)
+                    } else {
+                        selectProfile(remaining.first())
+                    }
                 }
             }
         }
@@ -181,7 +207,7 @@ class VpnViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             if (profile.id == 0) {
                 val newId = repository.insertProfile(profile)
-                repository.logSuccess("Successfully saved new Xray profile config: [${profile.name}]")
+                repository.logSuccess("Successfully saved new profile config: [${profile.name}]")
                 // Autoselect if it's the first or user checks it
                 val remaining = repository.getAllProfilesList()
                 if (remaining.size == 1) {
@@ -255,6 +281,34 @@ class VpnViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _themeColor.value = hexValue
             repository.saveSetting("theme_primary_color", hexValue)
+        }
+    }
+
+    fun setThemeMode(mode: String) {
+        viewModelScope.launch {
+            _themeMode.value = mode
+            repository.saveSetting("theme_mode", mode)
+        }
+    }
+
+    fun setHomeGlowStyle(style: String) {
+        viewModelScope.launch {
+            _homeGlowStyle.value = style
+            repository.saveSetting("home_glow_style", style)
+        }
+    }
+
+    fun setHomeHeaderTitle(title: String) {
+        viewModelScope.launch {
+            _homeHeaderTitle.value = title
+            repository.saveSetting("home_header_title", title)
+        }
+    }
+
+    fun setCardBorderStyle(style: String) {
+        viewModelScope.launch {
+            _cardBorderStyle.value = style
+            repository.saveSetting("card_border_style", style)
         }
     }
 }

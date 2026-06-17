@@ -18,6 +18,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.viewmodel.VpnViewModel
 import com.example.ui.theme.glassmorphicBackground
 import androidx.compose.foundation.shape.CircleShape
@@ -30,12 +31,14 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val haptic = com.example.LocalAppHaptic.current
     val dnsPrimary by viewModel.dnsPrimaryState.collectAsState()
     val dnsSecondary by viewModel.dnsSecondaryState.collectAsState()
     val routingMode by viewModel.routingModeState.collectAsState()
 
     var primaryDnsText by remember { mutableStateOf(dnsPrimary) }
     var secondaryDnsText by remember { mutableStateOf(dnsSecondary) }
+    var selectedTabIndex by remember { mutableStateOf(0) }
 
     // Sync state if databases update
     LaunchedEffect(dnsPrimary, dnsSecondary) {
@@ -56,19 +59,43 @@ fun SettingsScreen(
         // Upper Title Header
         Column {
             Text(
-                text = "DNS & Routing",
+                text = "Control Center",
                 color = MaterialTheme.colorScheme.primary,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.Bold
             )
             Text(
-                text = "Configure custom routing filters and DNS hosts",
+                text = "Configure custom routing filters, DNS hosts and system preferences",
                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.8f),
                 style = MaterialTheme.typography.bodySmall
             )
         }
 
-        // ================= ROUTING RULES CARD =================
+        // Beautiful tab division for Routing Rules and general App Settings
+        TabRow(
+            selectedTabIndex = selectedTabIndex,
+            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f),
+            contentColor = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(10.dp))
+        ) {
+            Tab(
+                selected = selectedTabIndex == 0,
+                onClick = { selectedTabIndex = 0 },
+                text = { Text("Routing Rules", fontWeight = FontWeight.Bold, fontSize = 13.sp) },
+                icon = { Icon(Icons.Default.AltRoute, contentDescription = "Routing Rules", modifier = Modifier.size(20.dp)) }
+            )
+            Tab(
+                selected = selectedTabIndex == 1,
+                onClick = { selectedTabIndex = 1 },
+                text = { Text("Settings & UI", fontWeight = FontWeight.Bold, fontSize = 13.sp) },
+                icon = { Icon(Icons.Default.Settings, contentDescription = "Settings & UI", modifier = Modifier.size(20.dp)) }
+            )
+        }
+
+        if (selectedTabIndex == 0) {
+            // ================= ROUTING RULES CARD =================
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = RoundedCornerShape(12.dp)
@@ -83,23 +110,26 @@ fun SettingsScreen(
                 }
 
                 Text(
-                    text = "Choose how Xray core handles outbound requests:",
+                    text = "Choose how the core handles outbound requests:",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
 
                 // Routing mode options
                 listOf(
-                    Triple("PROXY", "Proxy Global Core", "All internet traffic routes through the secure VPN tunnel."),
-                    Triple("DIRECT", "Bypass Local Direct", "Local network and domestic sites bypass the VPN completely."),
-                    Triple("BLOCK", "Ad-Block Filter", "Xray core automatically blocks ads and tracking scripts.")
+                    Triple("PROXY", "Global Proxy", "All internet traffic (all apps) routes through the VPN tunnel."),
+                    Triple("DIRECT", "Direct Connection", "Bypass VPN entirely for local/domestic traffic globally."),
+                    Triple("BLOCK", "Ad-Block Filter", "Blocks tracking scripts and ads across all apps globally.")
                 ).forEach { (modeKey, modeTitle, modeDesc) ->
                     val isSelected = routingMode == modeKey
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
                             .clip(RoundedCornerShape(8.dp))
-                            .clickable { viewModel.updateRoutingMode(modeKey) }
+                            .clickable {
+                                haptic.triggerClick()
+                                viewModel.updateRoutingMode(modeKey)
+                            }
                             .background(
                                 if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
                                 else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
@@ -110,7 +140,10 @@ fun SettingsScreen(
                     ) {
                         RadioButton(
                             selected = isSelected,
-                            onClick = { viewModel.updateRoutingMode(modeKey) },
+                            onClick = {
+                                haptic.triggerClick()
+                                viewModel.updateRoutingMode(modeKey)
+                            },
                             modifier = Modifier.testTag("routing_radio_$modeKey")
                         )
 
@@ -177,6 +210,7 @@ fun SettingsScreen(
                     ).forEach { (name, pair) ->
                         SuggestionChip(
                             onClick = {
+                                haptic.triggerClick()
                                 primaryDnsText = pair.first
                                 secondaryDnsText = pair.second
                                 Toast.makeText(context, "$name DNS preset selected", Toast.LENGTH_SHORT).show()
@@ -191,6 +225,7 @@ fun SettingsScreen(
                 // DNS Save button
                 Button(
                     onClick = {
+                        haptic.triggerClick()
                         if (primaryDnsText.isBlank() || secondaryDnsText.isBlank()) {
                             Toast.makeText(context, "DNS servers cannot be empty!", Toast.LENGTH_SHORT).show()
                         } else {
@@ -210,11 +245,16 @@ fun SettingsScreen(
                 }
             }
         }
-
+    } else {
         // ================= APP SETTINGS CARD =================
         val hapticsEnabled by viewModel.hapticsEnabled.collectAsState()
         val connectOnBoot by viewModel.connectOnBoot.collectAsState()
         val themeColor by viewModel.themeColor.collectAsState()
+        val themeModeSetting by viewModel.themeMode.collectAsState()
+
+        val glowStyleSetting by viewModel.homeGlowStyle.collectAsState()
+        val customHeaderSetting by viewModel.homeHeaderTitle.collectAsState()
+        val borderStyleSetting by viewModel.cardBorderStyle.collectAsState()
 
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -230,7 +270,10 @@ fun SettingsScreen(
                 }
 
                 Row(
-                    modifier = Modifier.fillMaxWidth().clickable { viewModel.setHapticsEnabled(!hapticsEnabled) },
+                    modifier = Modifier.fillMaxWidth().clickable {
+                        haptic.triggerClick()
+                        viewModel.setHapticsEnabled(!hapticsEnabled)
+                    },
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -238,11 +281,17 @@ fun SettingsScreen(
                         Text("Haptic Feedback", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                         Text("Enable structural vibration feedback for buttons.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Switch(checked = hapticsEnabled, onCheckedChange = { viewModel.setHapticsEnabled(it) })
+                    Switch(checked = hapticsEnabled, onCheckedChange = {
+                        haptic.triggerClick()
+                        viewModel.setHapticsEnabled(it)
+                    })
                 }
 
                 Row(
-                    modifier = Modifier.fillMaxWidth().clickable { viewModel.setConnectOnBoot(!connectOnBoot) },
+                    modifier = Modifier.fillMaxWidth().clickable {
+                        haptic.triggerClick()
+                        viewModel.setConnectOnBoot(!connectOnBoot)
+                    },
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
@@ -250,7 +299,10 @@ fun SettingsScreen(
                         Text("Connect on Boot", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
                         Text("Automatically start VPN when device restarts.", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
-                    Switch(checked = connectOnBoot, onCheckedChange = { viewModel.setConnectOnBoot(it) })
+                    Switch(checked = connectOnBoot, onCheckedChange = {
+                        haptic.triggerClick()
+                        viewModel.setConnectOnBoot(it)
+                    })
                 }
             }
         }
@@ -266,10 +318,10 @@ fun SettingsScreen(
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Icon(Icons.Default.Palette, "Theme SettingsOption", tint = MaterialTheme.colorScheme.tertiary)
-                    Text("Appearance", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Text("Appearance & Color", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 }
 
-                Text("Select Primary Theme Color:", style = MaterialTheme.typography.labelMedium)
+                Text("Select Primary Palette Accent:", style = MaterialTheme.typography.labelMedium)
                 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -293,61 +345,197 @@ fun SettingsScreen(
                                     color = if (isSelected) MaterialTheme.colorScheme.onSurface else androidx.compose.ui.graphics.Color.Transparent,
                                     shape = CircleShape
                                 )
-                                .clickable { viewModel.setThemeColor(hex) }
+                                .clickable {
+                                    haptic.triggerClick()
+                                    viewModel.setThemeColor(hex)
+                                }
                         )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+                Text("Theme Display Mode:", style = MaterialTheme.typography.labelMedium)
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    listOf(
+                        "SYSTEM" to "System Defaults",
+                        "LIGHT" to "Light Mode",
+                        "DARK" to "Dark Mode"
+                    ).forEach { (mode, label) ->
+                        val isSelected = themeModeSetting == mode
+                        Button(
+                            onClick = {
+                                haptic.triggerClick()
+                                viewModel.setThemeMode(mode)
+                            },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            contentPadding = PaddingValues(vertical = 4.dp, horizontal = 2.dp)
+                        ) {
+                            Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
         }
 
-        // ================= EXPORT SETTINGS CARD =================
-        var showExportDialog by remember { mutableStateOf(false) }
-
-        if (showExportDialog) {
-            AlertDialog(
-                onDismissRequest = { showExportDialog = false },
-                title = { Text("Export as APK") },
-                text = {
-                    Text("Because you are using AI Studio without a PC, you can download the APK directly to your phone via GitHub:\n\n1. Ensure you have saved your configurations.\n2. Tap 'GitHub' at the top right of the AI Studio web interface to publish this project.\n3. The included GitHub Actions workflow will automatically build your signed APK.\n4. Open your GitHub Repository on your phone, go to 'Actions', click the latest workflow, and download the 'XRay-VPN-APK' artifact directly to your phone!")
-                },
-                confirmButton = {
-                    TextButton(onClick = { showExportDialog = false }) {
-                        Text("Got it")
-                    }
-                }
-            )
-        }
-
+        // ================= ADVANCED THEME & CUSTOMIZATION =================
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            shape = RoundedCornerShape(12.dp)
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.tertiary.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
         ) {
-            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(Icons.Default.SystemUpdateAlt, "Export Option", tint = MaterialTheme.colorScheme.primary)
-                    Text("Export & Backup", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                    Icon(Icons.Default.Tune, "Advanced Theme Option", tint = MaterialTheme.colorScheme.secondary)
+                    Text("Advanced Core Customization", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
                 }
 
-                Text(
-                    text = "Bundle current app configurations and download as an installable APK package.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                Spacer(modifier = Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)))
 
-                Button(
-                    onClick = { showExportDialog = true },
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
-                ) {
-                    Icon(Icons.Default.Download, contentDescription = "Download APK")
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Export as APK", fontWeight = FontWeight.Bold)
+                // 1. Home screen Pulsing halo glow intensity options
+                Column {
+                    Text("Home Screen Pulsing Glow", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                    Text("Customize background animated waves on connections", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(
+                            "VIBRANT" to "Vibrant Ring",
+                            "SOFT" to "Soft Echo",
+                            "MINIMAL" to "Disabled"
+                        ).forEach { (styleKey, label) ->
+                            val isSelected = glowStyleSetting == styleKey
+                            Button(
+                                onClick = {
+                                    haptic.triggerClick()
+                                    viewModel.setHomeGlowStyle(styleKey)
+                                    Toast.makeText(context, "Neon glow intensity set to $styleKey", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant
+                                ),
+                                contentPadding = PaddingValues(vertical = 4.dp, horizontal = 2.dp)
+                            ) {
+                                Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
+                }
+
+                // 2. Custom App Title text customized over the main dashboard!
+                Column {
+                    Text("Dashboard Label Customization", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                    Text("Custom title displayed on top of the Home Dashboard", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(modifier = Modifier.height(6.dp))
+                    OutlinedTextField(
+                        value = customHeaderSetting,
+                        onValueChange = {
+                            viewModel.setHomeHeaderTitle(it)
+                        },
+                        placeholder = { Text("e.g. My Secure Tunnel") },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true,
+                        leadingIcon = { Icon(Icons.Default.Edit, "Edit Label") }
+                    )
+                }
+
+                // 3. Card shape Corner Border Styling options
+                Column {
+                    Text("Surface Edge Style", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold)
+                    Text("Set corners for Cards and Layout boundaries", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        listOf(
+                            "ROUNDED" to "Curved Glass (Modern)",
+                            "SHARP" to "Compact Slate (Retro)"
+                        ).forEach { (styleKey, label) ->
+                            val isSelected = borderStyleSetting == styleKey
+                            Button(
+                                onClick = {
+                                    haptic.triggerClick()
+                                    viewModel.setCardBorderStyle(styleKey)
+                                    Toast.makeText(context, "Interface edge style changed!", Toast.LENGTH_SHORT).show()
+                                },
+                                modifier = Modifier.weight(1f),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = if (isSelected) MaterialTheme.colorScheme.secondary else MaterialTheme.colorScheme.surfaceVariant,
+                                    contentColor = if (isSelected) MaterialTheme.colorScheme.onSecondary else MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            ) {
+                                Text(label, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                        }
+                    }
                 }
             }
         }
+
+        // ================= DEVELOPER PROFILE =================
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f), RoundedCornerShape(12.dp))
+        ) {
+            Column(modifier = Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(Icons.Default.AccountCircle, "Developer Info", tint = MaterialTheme.colorScheme.primary)
+                    Text("Developer Information", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                }
+
+                Spacer(modifier = Modifier.fillMaxWidth().height(1.dp).background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)))
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text("Lead Developer:", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text(
+                        text = "Yeasinul Hoque Tuhin",
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("Engineering Core:", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text(
+                        text = "Secure Tunnel Protocol",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text("Developer Website:", style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Text(
+                        text = "https://tuhinbro.com",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        }
+    }
 
         // Diagnostic information card info
         Card(

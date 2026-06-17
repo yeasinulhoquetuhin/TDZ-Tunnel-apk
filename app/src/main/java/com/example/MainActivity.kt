@@ -23,7 +23,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.data.V2rayProfile
-import com.example.ui.AiCompanionScreen
 import com.example.ui.ConfigEditorScreen
 import com.example.ui.HomeScreen
 import com.example.ui.LogsScreen
@@ -47,7 +46,15 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             val themeColorHex by viewModel.themeColor.collectAsState()
+            val themeModeSetting by viewModel.themeMode.collectAsState()
             val hapticEnabled by viewModel.hapticsEnabled.collectAsState()
+
+            val isSystemDark = androidx.compose.foundation.isSystemInDarkTheme()
+            val useDarkTheme = when (themeModeSetting) {
+                "DARK" -> true
+                "LIGHT" -> false
+                else -> isSystemDark
+            }
 
             val view = androidx.compose.ui.platform.LocalView.current
             val appHaptic = remember(view, hapticEnabled) {
@@ -55,7 +62,10 @@ class MainActivity : ComponentActivity() {
             }
 
             CompositionLocalProvider(LocalAppHaptic provides appHaptic) {
-                MyApplicationTheme(primaryColorHex = themeColorHex) {
+                MyApplicationTheme(
+                    primaryColorHex = themeColorHex,
+                    darkTheme = useDarkTheme
+                ) {
                     // Tracking states for manual config editor
                     var isEditorActive by remember { mutableStateOf(false) }
                 var editingProfileTarget by remember { mutableStateOf<V2rayProfile?>(null) }
@@ -112,17 +122,6 @@ class MainActivity : ComponentActivity() {
                                 )
 
                                 NavigationBarItem(
-                                    selected = currentTab == "ai",
-                                    onClick = { 
-                                        appHaptic.triggerClick()
-                                        currentTab = "ai" 
-                                    },
-                                    icon = { Icon(Icons.Default.AutoAwesome, contentDescription = "AI Help") },
-                                    label = { Text("AI", fontSize = 10.sp) },
-                                    modifier = Modifier.testTag("nav_tab_ai")
-                                )
-
-                                NavigationBarItem(
                                     selected = currentTab == "logs",
                                     onClick = { 
                                         appHaptic.triggerClick()
@@ -141,6 +140,7 @@ class MainActivity : ComponentActivity() {
                             .fillMaxSize()
                             .padding(innerPadding)
                             .consumeWindowInsets(innerPadding)
+                            .statusBarsPadding()
                     ) {
                         AnimatedContent(
                             targetState = isEditorActive,
@@ -168,7 +168,8 @@ class MainActivity : ComponentActivity() {
                                 when (currentTab) {
                                     "home" -> HomeScreen(
                                         viewModel = viewModel,
-                                        onNavigateToProfiles = { currentTab = "profiles" }
+                                        onNavigateToProfiles = { currentTab = "profiles" },
+                                        onNavigateToSettings = { currentTab = "dns" }
                                     )
                                     "profiles" -> ProfilesScreen(
                                         viewModel = viewModel,
@@ -178,9 +179,6 @@ class MainActivity : ComponentActivity() {
                                         }
                                     )
                                     "dns" -> SettingsScreen(
-                                        viewModel = viewModel
-                                    )
-                                    "ai" -> AiCompanionScreen(
                                         viewModel = viewModel
                                     )
                                     "logs" -> LogsScreen(

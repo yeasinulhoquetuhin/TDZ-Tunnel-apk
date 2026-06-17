@@ -17,6 +17,8 @@ class VpnRepository(private val vpnDao: VpnDao) {
 
     suspend fun selectProfile(id: Int) = vpnDao.selectProfile(id)
 
+    suspend fun deselectAllProfiles() = vpnDao.deselectAllProfiles()
+
     suspend fun getSelectedProfile(): V2rayProfile? = vpnDao.getSelectedProfile()
 
     suspend fun getAllProfilesList(): List<V2rayProfile> = vpnDao.getAllProfiles()

@@ -31,10 +31,18 @@ import androidx.compose.ui.platform.testTag
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.font.FontStyle
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
+import android.widget.Toast
+import android.app.Activity
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import com.example.ui.theme.glassmorphicBackground
 import com.example.data.V2rayProfile
 import com.example.engine.VpnEngine
@@ -43,9 +51,11 @@ import com.example.viewmodel.VpnViewModel
 @Composable
 fun HomeScreen(
     viewModel: VpnViewModel,
-    onNavigateToProfiles: () -> Unit,
+    onNavigateToProfiles: () -> Unit = {},
+    onNavigateToSettings: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
     val haptic = LocalAppHaptic.current
     val scope = rememberCoroutineScope()
     
@@ -54,6 +64,18 @@ fun HomeScreen(
     val ulSpeed by viewModel.uploadSpeedKb.collectAsState()
     val ping by viewModel.tunnelPingMs.collectAsState()
     val profile by viewModel.currentSelectedProfile.collectAsState()
+    
+    val homeHeaderTitle by viewModel.homeHeaderTitle.collectAsState()
+    val homeGlowStyle by viewModel.homeGlowStyle.collectAsState()
+    val cardBorderStyle by viewModel.cardBorderStyle.collectAsState()
+    
+    val vpnLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == Activity.RESULT_OK) {
+            profile?.let { viewModel.toggleVpnConnection(it) }
+        } else {
+            Toast.makeText(context, "VPN Permission Denied!", Toast.LENGTH_SHORT).show()
+        }
+    }
 
     val primaryColor = MaterialTheme.colorScheme.primary
     val statusColor = when (status) {
@@ -142,30 +164,15 @@ fun HomeScreen(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                // Header brand icon block
-                Box(
-                    modifier = Modifier
-                        .size(40.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(primaryColor),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Shield,
-                        contentDescription = "Brand Shield",
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(22.dp)
-                    )
-                }
                 Column {
                     Text(
-                        text = "V2ray Ultra",
+                        text = "ᴛᴅᴢ ᴛᴜɴɴᴇʟ",
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground
                     )
                     Text(
-                        text = "Secure VPN Tunnel",
+                        text = homeHeaderTitle,
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
@@ -174,7 +181,10 @@ fun HomeScreen(
 
             // User profile outline status dot nodes
             IconButton(
-                onClick = {},
+                onClick = {
+                    haptic.triggerClick()
+                    onNavigateToSettings()
+                },
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape)
@@ -182,8 +192,8 @@ fun HomeScreen(
             ) {
                 Box(contentAlignment = Alignment.BottomEnd) {
                     Icon(
-                        imageVector = Icons.Default.AccountCircle,
-                        contentDescription = "Profile",
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = "Profile Settings",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(28.dp)
                     )
@@ -215,28 +225,40 @@ fun HomeScreen(
                 val isConnectingOrConnected = status == VpnEngine.ConnectionStatus.CONNECTED || status == VpnEngine.ConnectionStatus.CONNECTING
                 val ringColor = if (isConnectingOrConnected) statusColor else primaryColor
 
-                Box(
-                    modifier = Modifier
-                        .size((180f * if (isConnectingOrConnected) pulseScale2 else 1f).dp)
-                        .clip(CircleShape)
-                        .background(ringColor.copy(alpha = 0.08f))
-                )
+                if (homeGlowStyle != "MINIMAL") {
+                    val scaleAlphaMultiplier = if (homeGlowStyle == "SOFT") 0.4f else 1.0f
+                    Box(
+                        modifier = Modifier
+                            .size((180f * if (isConnectingOrConnected) pulseScale2 else 1f).dp)
+                            .clip(CircleShape)
+                            .background(ringColor.copy(alpha = 0.08f * scaleAlphaMultiplier))
+                    )
 
-                Box(
-                    modifier = Modifier
-                        .size((140f * if (isConnectingOrConnected) pulseScale1 else 1f).dp)
-                        .clip(CircleShape)
-                        .background(ringColor.copy(alpha = 0.15f))
-                )
+                    Box(
+                        modifier = Modifier
+                            .size((140f * if (isConnectingOrConnected) pulseScale1 else 1f).dp)
+                            .clip(CircleShape)
+                            .background(ringColor.copy(alpha = 0.15f * scaleAlphaMultiplier))
+                    )
+                }
 
                 // Central Active Button
                 Button(
                     onClick = {
-                        profile?.let { 
+                        profile?.let { prof ->
                             scope.launch {
                                 haptic.triggerConnectionPulse()
                             }
-                            viewModel.toggleVpnConnection(it) 
+                            if (status == VpnEngine.ConnectionStatus.DISCONNECTED) {
+                                val intent = android.net.VpnService.prepare(context)
+                                if (intent != null) {
+                                    vpnLauncher.launch(intent)
+                                } else {
+                                    viewModel.toggleVpnConnection(prof)
+                                }
+                            } else {
+                                viewModel.toggleVpnConnection(prof)
+                            }
                         }
                     },
                     modifier = Modifier
@@ -347,7 +369,7 @@ fun HomeScreen(
                                 color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
                             )
                             Text(
-                                text = profile?.protocol ?: "VLESS/Xray",
+                                text = profile?.protocol ?: "VLESS",
                                 fontSize = 12.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -568,6 +590,10 @@ fun SpeedChart(
     val uploadColor = Color(0xFFF59E0B) // Warm Amber Color
     val gridLineColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.08f)
 
+    // Thread-safe copy snapshot lists for rendering dynamically without concurrent modification
+    val dlData = remember(downloadHistory.size) { downloadHistory.toList() }
+    val ulData = remember(uploadHistory.size) { uploadHistory.toList() }
+
     Card(
         modifier = modifier.fillMaxWidth().glassmorphicBackground(MaterialTheme.colorScheme.primary, 0.05f),
         shape = RoundedCornerShape(24.dp),
@@ -603,8 +629,8 @@ fun SpeedChart(
                 }
 
                 // Dynamic metric Peak value tracker
-                val maxDown = downloadHistory.maxOrNull() ?: 0f
-                val maxUp = uploadHistory.maxOrNull() ?: 0f
+                val maxDown = dlData.maxOrNull() ?: 0f
+                val maxUp = ulData.maxOrNull() ?: 0f
                 val peekVal = maxOf(maxDown, maxUp)
                 val peekLabel = if (peekVal > 1024) String.format("%.1f MB/s", peekVal / 1024f) else String.format("%.0f KB/s", peekVal)
 
@@ -643,8 +669,8 @@ fun SpeedChart(
                     
                     // Safely define peak boundaries to avoid zero divide issues
                     val maxVal = maxOf(
-                        downloadHistory.maxOrNull() ?: 100f,
-                        uploadHistory.maxOrNull() ?: 100f,
+                        dlData.maxOrNull() ?: 100f,
+                        ulData.maxOrNull() ?: 100f,
                         100f
                     )
 
@@ -662,13 +688,13 @@ fun SpeedChart(
                     }
 
                     // Plot Download Path (Smooth gradient styled fill area)
-                    if (downloadHistory.isNotEmpty()) {
+                    if (dlData.isNotEmpty()) {
                         val dlPath = Path()
                         val dlAreaPath = Path()
-                        val stepX = width / (downloadHistory.size - 1).coerceAtLeast(1)
+                        val stepX = width / (dlData.size - 1).coerceAtLeast(1)
 
                         // Smooth interpolation (cubic bezier)
-                        downloadHistory.forEachIndexed { index, value ->
+                        dlData.forEachIndexed { index, value ->
                             val x = index * stepX
                             val ratio = value / maxVal
                             val y = height - (ratio * height * 0.85f)
@@ -679,7 +705,7 @@ fun SpeedChart(
                                 dlAreaPath.lineTo(x, y)
                             } else {
                                 val prevX = (index - 1) * stepX
-                                val prevVal = downloadHistory[index - 1]
+                                val prevVal = dlData[index - 1]
                                 val prevY = height - ((prevVal / maxVal) * height * 0.85f)
                                 
                                 val cp1x = prevX + (x - prevX) / 2
@@ -691,7 +717,7 @@ fun SpeedChart(
                                 dlAreaPath.cubicTo(cp1x, cp1y, cp2x, cp2y, x, y)
                             }
 
-                            if (index == downloadHistory.lastIndex) {
+                            if (index == dlData.lastIndex) {
                                 dlAreaPath.lineTo(x, height)
                                 dlAreaPath.close()
                             }
@@ -720,12 +746,12 @@ fun SpeedChart(
                     }
 
                     // Plot Upload Path (Smooth styled dashes pattern)
-                    if (uploadHistory.isNotEmpty()) {
+                    if (ulData.isNotEmpty()) {
                         val ulPath = Path()
                         val ulAreaPath = Path()
-                        val stepX = width / (uploadHistory.size - 1).coerceAtLeast(1)
+                        val stepX = width / (ulData.size - 1).coerceAtLeast(1)
 
-                        uploadHistory.forEachIndexed { index, value ->
+                        ulData.forEachIndexed { index, value ->
                             val x = index * stepX
                             val ratio = value / maxVal
                             val y = height - (ratio * height * 0.85f)
@@ -736,7 +762,7 @@ fun SpeedChart(
                                 ulAreaPath.lineTo(x, y)
                             } else {
                                 val prevX = (index - 1) * stepX
-                                val prevVal = uploadHistory[index - 1]
+                                val prevVal = ulData[index - 1]
                                 val prevY = height - ((prevVal / maxVal) * height * 0.85f)
                                 
                                 val cp1x = prevX + (x - prevX) / 2
@@ -748,7 +774,7 @@ fun SpeedChart(
                                 ulAreaPath.cubicTo(cp1x, cp1y, cp2x, cp2y, x, y)
                             }
 
-                            if (index == uploadHistory.lastIndex) {
+                            if (index == ulData.lastIndex) {
                                 ulAreaPath.lineTo(x, height)
                                 ulAreaPath.close()
                             }
@@ -828,5 +854,27 @@ fun SpeedChart(
                 }
             }
         }
+    }
+}
+
+@Composable
+fun TdzLogo(
+    modifier: Modifier = Modifier,
+    size: Dp = 40.dp
+) {
+    Box(
+        modifier = modifier
+            .size(size)
+            .clip(RoundedCornerShape(size * 0.25f))
+            .background(Color.White)
+            .border(1.dp, Color.LightGray.copy(alpha = 0.3f), RoundedCornerShape(size * 0.25f)),
+        contentAlignment = Alignment.Center
+    ) {
+        androidx.compose.foundation.Image(
+            painter = androidx.compose.ui.res.painterResource(id = com.example.R.drawable.app_logo),
+            contentDescription = "TDZ TUNNEL Logo",
+            modifier = Modifier.fillMaxSize(),
+            contentScale = androidx.compose.ui.layout.ContentScale.Crop
+        )
     }
 }
