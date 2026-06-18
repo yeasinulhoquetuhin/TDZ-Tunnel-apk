@@ -140,7 +140,8 @@ class MainActivity : ComponentActivity() {
                             .fillMaxSize()
                             .padding(innerPadding)
                             .consumeWindowInsets(innerPadding)
-                            .statusBarsPadding()
+                            .safeDrawingPadding()
+                            .padding(top = 12.dp)
                     ) {
                         AnimatedContent(
                             targetState = isEditorActive,
